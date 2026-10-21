@@ -1,0 +1,43 @@
+# Test: can GitHub Actions reach the 10 Shopify stores?
+# AWS addresses get HTTP 429 from Shopify. This checks GitHub's runners (Microsoft Azure).
+# Run it by hand: GitHub -> Actions -> "Fetch test" -> Run workflow. It needs no secrets.
+name: Fetch test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Runner address
+        run: |
+          echo "Public IP: $(curl -s https://checkip.amazonaws.com)"
+
+      - name: products.json status for every store
+        run: |
+          UA="Mozilla/5.0 (compatible; the-catalogue/1.0)"
+          ok=0
+          for u in https://www.fugazee.com https://genrage.com https://www.nattygarb.com https://sullitt.com \
+                   https://warpingtheories.com https://arkar.in https://www.noughtone.in https://www.farak.co \
+                   https://offscript.co.in https://www.urbanmonkey.com; do
+            code=$(curl -s -o body.json -w "%{http_code}" -A "$UA" "$u/products.json?limit=250&page=1")
+            count=$(python3 -c "import json; print(len(json.load(open('body.json'))['products']))" 2>/dev/null || echo "-")
+            printf "%-30s HTTP %s  products=%s  bytes=%s\n" "$u" "$code" "$count" "$(wc -c < body.json)"
+            [ "$code" = "200" ] && ok=$((ok + 1))
+            sleep 2
+          done
+          echo "RESULT: $ok of 10 stores returned 200"
+
+      - name: A larger fetch (collections + one membership page, like the daily job)
+        run: |
+          UA="Mozilla/5.0 (compatible; the-catalogue/1.0)"
+          for p in "/collections.json?limit=250" "/collections/all/products.json?limit=250" "/products.json?limit=250&page=2"; do
+            printf "%-45s HTTP %s\n" "urbanmonkey$p" \
+              "$(curl -s -o /dev/null -w '%{http_code}' -A "$UA" "https://www.urbanmonkey.com$p")"
+            sleep 2
+          done
