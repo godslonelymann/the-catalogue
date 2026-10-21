@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fafaf9;
+  --surface: #ffffff;
+  --foreground: #1c1917;
+  --muted: #78716c;
+  --border: #e7e5e4;
+  --accent: #b45309;
+  --accent-soft: #fef3c7;
+  --sale: #be123c;
+  --ok: #15803d;
+  --ok-soft: #dcfce7;
+  --sold-out: #a8a29e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0c0a09;
+    --surface: #1c1917;
+    --foreground: #f5f5f4;
+    --muted: #a8a29e;
+    --border: #292524;
+    --accent: #f59e0b;
+    --accent-soft: #451a03;
+    --sale: #fb7185;
+    --ok: #4ade80;
+    --ok-soft: #052e16;
+    --sold-out: #57534e;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-sale: var(--sale);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-sold-out: var(--sold-out);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Product descriptions come from the stores as HTML (cleaned on the server). */
+.description { line-height: 1.65; color: var(--foreground); }
+.description p { margin: 0 0 0.75rem; }
+.description ul, .description ol { margin: 0 0 0.75rem 1.25rem; list-style: disc; }
+.description ol { list-style: decimal; }
+.description h1, .description h2, .description h3, .description h4 { font-weight: 600; margin: 1rem 0 0.5rem; }
+.description a { color: var(--accent); text-decoration: underline; }
+.description table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.875rem; display: block; overflow-x: auto; }
+.description th, .description td { border: 1px solid var(--border); padding: 0.375rem 0.5rem; text-align: left; }
+.description img { max-width: 100%; height: auto; border-radius: 0.5rem; }
+
+/* One dropdown arrow for every <select>: same size and the same gap from the edge everywhere.
+   Unlayered, so it wins over Tailwind's padding utilities. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2378716c' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem 1rem;
+  padding-right: 2.5rem;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

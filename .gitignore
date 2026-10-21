@@ -1,0 +1,19 @@
+# Secrets and local settings
+.env
+*.pem
+
+# Data and logs (raw data lives in S3)
+data/
+logs/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Local tool settings
+.claude/
+.DS_Store
+
+# Local development database
+.devdb/
