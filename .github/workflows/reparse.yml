@@ -1,0 +1,25 @@
+# By hand only: load a stored run again from S3 (for example after a parser fix). Sends no alerts.
+name: Reparse
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID, for example RUN-7KQ2M"
+        required: true
+
+concurrency:
+  group: products   # do not run at the same time as a products run
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  reparse:
+    uses: ./.github/workflows/run-pipeline.yml
+    with:
+      command: reparse ${{ inputs.run_id }}
+      timeout: 15
+    secrets: inherit

@@ -1,4 +1,8 @@
-"""Download raw JSON from one store into storage, and record each file in raw_files."""
+"""Download raw JSON from one store into storage, and record each file in raw_files.
+
+The fetch functions also return the pages they saved, as (raw_file_id, collection_handle, data),
+so the parser can use them from memory. Each page is saved to storage before it is returned.
+"""
 import logging
 import time
 from zoneinfo import ZoneInfo
@@ -33,45 +37,49 @@ def _prefix(store_slug, run_id, started_at):
 
 
 def _save(conn, storage, run_id, key, raw, kind, page, collection_handle=None):
+    """Store one raw page and record it. Returns the raw_files ID."""
     stored = put_json(storage, key, raw)
-    conn.execute(
+    raw_file_id = conn.execute(
         """INSERT INTO raw_files (run_id, s3_key, kind, collection_handle, page, http_status,
                                   bytes, stored_bytes, sha256)
-           VALUES (%s, %s, %s, %s, %s, 200, %s, %s, %s)""",
-        (run_id, stored.key, kind, collection_handle, page, stored.bytes, stored.stored_bytes, stored.sha256))
+           VALUES (%s, %s, %s, %s, %s, 200, %s, %s, %s) RETURNING id""",
+        (run_id, stored.key, kind, collection_handle, page, stored.bytes, stored.stored_bytes,
+         stored.sha256)).fetchone()[0]
     conn.commit()
+    return raw_file_id
 
 
 def fetch_products(conn, storage, store, run_id, started_at):
-    """Save every products.json page. Returns the number of products seen."""
-    prefix, total = _prefix(store["slug"], run_id, started_at), 0
+    """Save every products.json page. Returns the saved pages for parse_products."""
+    prefix, files = _prefix(store["slug"], run_id, started_at), []
     for page, raw, items in shopify.pages(store["base_url"], "products", "products"):
-        _save(conn, storage, run_id, f"{prefix}/products_page_{page}", raw, "products", page)
-        total += len(items)
-    return total
+        fid = _save(conn, storage, run_id, f"{prefix}/products_page_{page}", raw, "products", page)
+        files.append((fid, None, {"products": items}))
+    return files
 
 
 def fetch_collections(conn, storage, store, run_id, started_at):
     """Save collections.json, then the product list of every non-empty collection.
 
-    Returns (collections_seen, membership_pages).
+    Returns the saved pages for parse_collections: {"collections": [...], "collection_products": [...]}.
     """
     prefix = _prefix(store["slug"], run_id, started_at)
+    files = {"collections": [], "collection_products": []}
     collections = []
     for page, raw, items in shopify.pages(store["base_url"], "collections", "collections"):
-        _save(conn, storage, run_id, f"{prefix}/collections_page_{page}", raw, "collections", page)
+        fid = _save(conn, storage, run_id, f"{prefix}/collections_page_{page}", raw, "collections", page)
+        files["collections"].append((fid, None, {"collections": items}))
         collections += items
     time.sleep(CONFIG.request_delay)
 
-    n_pages = 0
     for c in collections:
         if not c.get("products_count"):
             continue  # nothing public to fetch
         handle = c["handle"]
-        for page, raw, _ in shopify.pages(store["base_url"], f"collections/{handle}/products", "products",
-                                          stop_on_short_page=True):
-            _save(conn, storage, run_id, f"{prefix}/collection_products/{handle}_page_{page}", raw,
-                  "collection_products", page, collection_handle=handle)
-            n_pages += 1
+        for page, raw, items in shopify.pages(store["base_url"], f"collections/{handle}/products", "products",
+                                              stop_on_short_page=True):
+            fid = _save(conn, storage, run_id, f"{prefix}/collection_products/{handle}_page_{page}", raw,
+                        "collection_products", page, collection_handle=handle)
+            files["collection_products"].append((fid, handle, {"products": items}))
         time.sleep(CONFIG.request_delay)
-    return len(collections), n_pages
+    return files

@@ -1,0 +1,24 @@
+# Daily: pg_dump of the database -> S3 backups/ (S3 deletes backups after 14 days).
+name: Backup
+
+on:
+  schedule:
+    - cron: "30 22 * * *"   # 22:30 UTC = 04:00 IST
+  workflow_dispatch:
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  backup:
+    uses: ./.github/workflows/run-pipeline.yml
+    with:
+      command: backup
+      timeout: 15
+      pg_client: true
+    secrets: inherit

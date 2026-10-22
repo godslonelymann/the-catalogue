@@ -1,4 +1,6 @@
-"""Parse the raw files of one run (read back from storage) into Postgres.
+"""Parse the raw files of one run into Postgres.
+
+The pages come from memory (just fetched) or, for a reparse, are read back from storage.
 
 Both parsers work on one store and one database transaction:
   * stage the JSON as rows in temporary tables with COPY,
@@ -189,9 +191,13 @@ def _product_rows(files):
     return r, extras
 
 
-def parse_products(conn, storage, store, run_id, at):
-    """Load a 'products' run. Commits on success. Returns ProductsResult."""
-    files = load_raw(conn, storage, run_id, "products")
+def parse_products(conn, storage, store, run_id, at, files=None):
+    """Load a 'products' run. Commits on success. Returns ProductsResult.
+
+    files: the pages from fetch_products. None = read them from storage (reparse).
+    """
+    if files is None:
+        files = load_raw(conn, storage, run_id, "products")
     rows, extras = _product_rows(files)
     if extras.new_fields:
         log.warning("%s: new fields stored in extra_attributes: %s", store["slug"], sorted(extras.new_fields))
@@ -355,10 +361,15 @@ def parse_products(conn, storage, store, run_id, at):
 
 # ---------------------------------------------------------------------------- collections
 
-def parse_collections(conn, storage, store, run_id, at):
-    """Load a 'collections' run: collections + which product is in which collection. Commits."""
+def parse_collections(conn, storage, store, run_id, at, files=None):
+    """Load a 'collections' run: collections + which product is in which collection. Commits.
+
+    files: the pages from fetch_collections. None = read them from storage (reparse).
+    """
+    if files is None:
+        files = {kind: load_raw(conn, storage, run_id, kind) for kind in ("collections", "collection_products")}
     colls, extras = [], Extras()
-    for fid, _, data in load_raw(conn, storage, run_id, "collections"):
+    for fid, _, data in files["collections"]:
         for c in data["collections"]:
             img = c.get("image") or {}
             colls.append((c["id"], c["handle"], c["title"], blank(c.get("description")), c.get("published_at"),
@@ -368,7 +379,7 @@ def parse_collections(conn, storage, store, run_id, at):
             if img:
                 extras.add("collection", c["id"], fid, img, COLLECTION_IMAGE_KEYS, prefix="image.")
     links = {(handle, p["id"])
-             for _, handle, data in load_raw(conn, storage, run_id, "collection_products")
+             for _, handle, data in files["collection_products"]
              for p in data["products"]}
     if extras.new_fields:
         log.warning("%s: new fields stored in extra_attributes: %s", store["slug"], sorted(extras.new_fields))

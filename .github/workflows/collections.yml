@@ -1,0 +1,28 @@
+# Daily: collections.json and the products of each collection -> S3 -> Postgres.
+name: Collections
+
+on:
+  schedule:
+    - cron: "30 21 * * *"   # 21:30 UTC = 03:00 IST
+  workflow_dispatch:
+    inputs:
+      store:
+        description: "Only this store slug (empty = all stores)"
+        required: false
+        default: ""
+
+concurrency:
+  group: collections
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  collections:
+    uses: ./.github/workflows/run-pipeline.yml
+    with:
+      command: collections${{ inputs.store && format(' --store {0}', inputs.store) || '' }}
+      timeout: 45
+    secrets: inherit

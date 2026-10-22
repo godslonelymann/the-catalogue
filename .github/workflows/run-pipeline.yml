@@ -1,0 +1,67 @@
+# Shared steps for every pipeline job: Python, AWS access (OIDC, no keys), one pipeline command.
+# The other workflows call this one. It does not run on its own.
+name: Run pipeline
+
+on:
+  workflow_call:
+    inputs:
+      command:
+        description: "Arguments for python -m pipeline, for example: products"
+        required: true
+        type: string
+      timeout:
+        description: "Minutes before GitHub stops the job"
+        required: false
+        type: number
+        default: 30
+      pg_client:
+        description: "Install pg_dump with the same major version as Neon (for backups)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write   # OIDC: GitHub proves who it is to AWS
+  contents: read
+
+jobs:
+  run:
+    # Forks of this public repo have no secrets, so they must not run the schedule.
+    if: github.repository == 'godslonelymann/the-catalogue'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: pg_dump 18 (same major version as Neon)
+        if: inputs.pg_client
+        run: |
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-18
+          echo /usr/lib/postgresql/18/bin >> "$GITHUB_PATH"
+
+      - name: AWS access (role catalogue-github)
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: python -m pipeline ${{ inputs.command }}
+        # The arguments come through an environment variable, never straight into the script,
+        # so a typed input cannot run shell commands. $PIPELINE_ARGS is split into words on purpose.
+        run: python -m pipeline $PIPELINE_ARGS
+        env:
+          PIPELINE_ARGS: ${{ inputs.command }}
+          CATALOGUE_DB: ${{ secrets.CATALOGUE_DB }}
+          CATALOGUE_STORAGE: ${{ vars.CATALOGUE_STORAGE }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_BOT_USERNAME: ${{ vars.TELEGRAM_BOT_USERNAME }}

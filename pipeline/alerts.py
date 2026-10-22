@@ -59,6 +59,13 @@ def send_restock_alerts(conn, restocked_variant_ids, telegram=None):
 
     sent = 0
     for tracker_id, matches in by_tracker.items():
+        # Claim the tracker before we send. If this run stops after the send, the tracker is
+        # already 'notified', so a later run cannot send the same message again.
+        claimed = conn.execute("""UPDATE trackers SET status = 'notified', notified_at = now()
+                                  WHERE id = %s AND status = 'active'""", (tracker_id,)).rowcount
+        conn.commit()
+        if not claimed:
+            continue  # another run or a /stop got there first
         first = matches[0]
         first["url"] = product_url(first["base_url"], first["handle"])
         text = _message(first, [m["variant_title"] for m in matches])
@@ -70,13 +77,17 @@ def send_restock_alerts(conn, restocked_variant_ids, telegram=None):
                             VALUES (%s, %s, 'failed', %s)""", (tracker_id, first["variant_id"], str(e)))
             if e.user_blocked_bot:
                 conn.execute("UPDATE subscribers SET stopped_at = now() WHERE id = %s", (first["subscriber_id"],))
-                conn.execute("""UPDATE trackers SET status = 'cancelled', cancelled_at = now()
-                                WHERE subscriber_id = %s AND status = 'active'""", (first["subscriber_id"],))
+                conn.execute("""UPDATE trackers SET status = 'cancelled', cancelled_at = now(), notified_at = NULL
+                                WHERE subscriber_id = %s AND (status = 'active' OR id = %s)""",
+                             (first["subscriber_id"], tracker_id))
+            else:
+                # Not sent: make the tracker active again, so the next restock can try again.
+                conn.execute("""UPDATE trackers SET status = 'active', notified_at = NULL
+                                WHERE id = %s AND status = 'notified'""", (tracker_id,))
             conn.commit()
             continue
         conn.execute("""INSERT INTO notifications (tracker_id, variant_id, status, telegram_message_id)
                         VALUES (%s, %s, 'sent', %s)""", (tracker_id, first["variant_id"], message_id))
-        conn.execute("UPDATE trackers SET status = 'notified', notified_at = now() WHERE id = %s", (tracker_id,))
         conn.commit()
         sent += 1
     log.info("restocked variants: %d, alerts sent: %d", len(restocked_variant_ids), sent)

@@ -1,9 +1,9 @@
 """Command line: python -m pipeline <command>
 
   migrate                     apply db/migrations and db/seed
+  set-db-passwords [--env-file PATH]   new passwords for the pipeline + website users -> .env
   products [--store SLUG]     fetch products -> S3 -> Postgres -> restock alerts   (every 3 hours)
   collections [--store SLUG]  fetch collections + membership                       (daily)
-  bot                         answer Telegram messages for up to 50 seconds         (every minute)
   backup                      pg_dump -> S3 backups/                                (daily)
   reparse RUN-XXXXX           load a stored run again (no alerts)
   track-link PRD-XXXXX [VAR-XXXXX]   create a tracker link (for testing the bot)
@@ -14,7 +14,8 @@ import logging
 import sys
 
 from . import jobs
-from .db import connect, migrate
+from .config import ROOT
+from .db import migrate, set_db_passwords
 
 
 def main(argv=None):
@@ -22,10 +23,11 @@ def main(argv=None):
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("migrate")
+    p = sub.add_parser("set-db-passwords")
+    p.add_argument("--env-file", default=str(ROOT / ".env"))
     for name in ("products", "collections"):
         p = sub.add_parser(name)
         p.add_argument("--store", help="only this store slug")
-    sub.add_parser("bot")
     sub.add_parser("backup")
     p = sub.add_parser("reparse")
     p.add_argument("run_id")
@@ -40,15 +42,14 @@ def main(argv=None):
     if args.command == "migrate":
         migrate()
         return 0
+    if args.command == "set-db-passwords":
+        from pathlib import Path
+        set_db_passwords(Path(args.env_file))
+        return 0
     if args.command == "products":
         return jobs.run_products(args.store)
     if args.command == "collections":
         return jobs.run_collections(args.store)
-    if args.command == "bot":
-        from .bot import poll
-        with connect() as conn:
-            poll(conn)
-        return 0
     if args.command == "backup":
         from .backup import backup
         from .storage import open_storage

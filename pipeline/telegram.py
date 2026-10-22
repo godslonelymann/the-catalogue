@@ -56,8 +56,3 @@ class Telegram:
         result = self.call("sendMessage", chat_id=chat_id, text=text, parse_mode="HTML",
                            link_preview_options={"is_disabled": True})
         return result["message_id"]
-
-    def get_updates(self, offset, timeout=50):
-        # Long polling: Telegram holds the request open up to `timeout` seconds.
-        return self.call("getUpdates", http_timeout=timeout + 10, offset=offset, timeout=timeout,
-                         allowed_updates=["message"])

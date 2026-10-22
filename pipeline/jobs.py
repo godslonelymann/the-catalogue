@@ -27,8 +27,8 @@ def run_products(only=None):
         for store in active_stores(conn, only):
             run_id, started_at = fetch.start_run(conn, store["id"], "products")
             try:
-                fetch.fetch_products(conn, storage, store, run_id, started_at)
-                result = parse.parse_products(conn, storage, store, run_id, started_at)
+                files = fetch.fetch_products(conn, storage, store, run_id, started_at)
+                result = parse.parse_products(conn, storage, store, run_id, started_at, files)
                 fetch.finish_run(conn, run_id, "success", products_count=result.products,
                                  variants_count=result.variants, restocked_count=len(result.restocked))
                 restocked += result.restocked
@@ -51,8 +51,8 @@ def run_collections(only=None):
         for store in active_stores(conn, only):
             run_id, started_at = fetch.start_run(conn, store["id"], "collections")
             try:
-                fetch.fetch_collections(conn, storage, store, run_id, started_at)
-                result = parse.parse_collections(conn, storage, store, run_id, started_at)
+                files = fetch.fetch_collections(conn, storage, store, run_id, started_at)
+                result = parse.parse_collections(conn, storage, store, run_id, started_at, files)
                 fetch.finish_run(conn, run_id, "success", collections_count=result.collections,
                                  links_count=result.links)
                 log.info("%-16s %s collections=%d links=%d skipped_links=%d", store["slug"], run_id,

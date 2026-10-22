@@ -1,0 +1,29 @@
+# Every 3 hours: products.json from every store -> S3 -> Postgres -> restock alerts.
+name: Products
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"   # UTC. IST = UTC + 5:30, so 05:30, 08:30, 11:30 ... IST
+  workflow_dispatch:
+    inputs:
+      store:
+        description: "Only this store slug (empty = all stores)"
+        required: false
+        default: ""
+
+# One run at a time. A new run waits for the old one; it never cancels it.
+concurrency:
+  group: products
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  products:
+    uses: ./.github/workflows/run-pipeline.yml
+    with:
+      command: products${{ inputs.store && format(' --store {0}', inputs.store) || '' }}
+      timeout: 45
+    secrets: inherit

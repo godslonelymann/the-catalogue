@@ -14,27 +14,42 @@ class FetchError(Exception):
     pass
 
 
+MAX_RETRY_AFTER = 120  # seconds; a longer wait from a store is cut to this
+
+
+def retry_after_seconds(value):
+    """Seconds from a Retry-After header, or None. Only the number form is used (not the date form)."""
+    value = (value or "").strip()
+    if not value.isdigit():
+        return None
+    return min(int(value), MAX_RETRY_AFTER)
+
+
 def get(url, attempts=4):
     """GET a URL and return the body bytes.
 
     Uses curl because Python's urllib raised IncompleteRead on large chunked
     responses during testing. Retries rate limits (429/430), server errors and
-    network errors with a growing pause.
+    network errors. The pause is the store's Retry-After value if it sends one,
+    else it grows with each attempt (10, 20, 30 s).
     """
     for attempt in range(1, attempts + 1):
         r = subprocess.run(
             ["curl", "-sS", "--compressed", "--max-time", "120", "-A", CONFIG.user_agent,
-             "-w", "\n%{http_code}", url],
+             "-w", "\n%{http_code} %header{retry-after}", url],
             capture_output=True,
         )
-        body, _, code = r.stdout.rpartition(b"\n")
-        code = code.decode() or "000"
+        body, _, status = r.stdout.rpartition(b"\n")
+        code, _, retry_after = status.decode(errors="replace").partition(" ")
+        code = code or "000"
         if r.returncode == 0 and code == "200":
             return body
         retryable = code in ("429", "430") or code.startswith("5") or r.returncode != 0
         if retryable and attempt < attempts:
-            pause = 10 * attempt
-            log.warning("GET %s -> HTTP %s (curl exit %s), retry in %ss", url, code, r.returncode, pause)
+            wait = retry_after_seconds(retry_after)
+            pause = wait if wait is not None else 10 * attempt
+            log.warning("GET %s -> HTTP %s (curl exit %s), retry in %ss%s", url, code, r.returncode, pause,
+                        " (retry-after)" if wait is not None else "")
             time.sleep(pause)
             continue
         raise FetchError(f"GET {url} failed: HTTP {code}, curl exit {r.returncode}, "
