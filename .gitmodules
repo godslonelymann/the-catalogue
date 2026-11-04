@@ -1,0 +1,9 @@
+[submodule "the-catalogue-backend"]
+	path = the-catalogue-backend
+	url = https://github.com/godslonelymann/the-catalogue-backend.git
+[submodule "the-catalogue-frontend"]
+	path = the-catalogue-frontend
+	url = https://github.com/godslonelymann/the-catalogue-frontend.git
+[submodule "the-catalogue-pipeline"]
+	path = the-catalogue-pipeline
+	url = https://github.com/godslonelymann/the-catalogue-data-pipeline.git
